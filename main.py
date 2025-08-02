@@ -11,6 +11,7 @@ import os
 import threading
 from datetime import datetime, timedelta
 from dotenv import load_dotenv
+from flask import Flask, request
 
 # تحميل المتغيرات من ملف .env
 load_dotenv()
@@ -22,7 +23,6 @@ MAINTENANCE_MODE = False
 BOT_VERSION = "1.3"
 DEVELOPER_USERNAME = "@Czanw"
 SUPPORT_CHANNEL = "@vcnra"
-PERIODIC_CHAT_ID = "@vcnra"  # معرف الدردشة للإرسال الدوري
 
 # إنشاء كائن البوت
 bot = telebot.TeleBot(TOKEN)
@@ -96,8 +96,8 @@ def create_database():
                  timestamp TIMESTAMP DEFAULT CURRENT_TIMESTAMP)''')
     
     # إدخال الإعدادات الافتراضية
-    c.execute('''INSERT OR IGNORE INTO settings (id, welcome_msg, subscribe_msg) 
-                 VALUES (1, 'مرحباً بك في بوت تحميل التيك توك! 🎥\n\nفقط أرسل رابط الفيديو وسأقوم بتحميله لك بجودة 720p', 'يجب الاشتراك في القناة أولاً للاستفادة من البوت')''')
+    c.execute('''INSERT OR IGNORE INTO settings (id, welcome_msg, subscribe_msg, notify_new_users) 
+                 VALUES (1, 'مرحباً بك في بوت تحميل التيك توك! 🎥\n\nفقط أرسل رابط الفيديو وسأقوم بتحميله لك بجودة 720p', 'يجب الاشتراك في القناة أولاً للاستفادة من البوت', 1)''')
     
     conn.commit()
     conn.close()
@@ -113,6 +113,16 @@ def upgrade_database():
     if 'download_count' not in columns:
         c.execute("ALTER TABLE users ADD COLUMN download_count INTEGER DEFAULT 0")
         logging.info("تمت إضافة عمود download_count إلى جدول users")
+    
+    # التحقق من وجود عمود notify_new_users في الإعدادات
+    c.execute("PRAGMA table_info(settings)")
+    columns = [col[1] for col in c.fetchall()]
+    
+    if 'notify_new_users' not in columns:
+        c.execute("ALTER TABLE settings ADD COLUMN notify_new_users INTEGER DEFAULT 1")
+        logging.info("تمت إضافة عمود notify_new_users إلى جدول settings")
+        # تعيين القيمة الافتراضية
+        c.execute("UPDATE settings SET notify_new_users=1 WHERE id=1")
     
     conn.commit()
     conn.close()
@@ -150,6 +160,14 @@ def add_user(user_id, username, first_name, last_name):
     conn.commit()
     conn.close()
     log_activity(user_id, "انضم جديد")
+    
+    # إرسال إشعار للمطور إذا كان الإعداد مفعلاً
+    if get_setting('notify_new_users') == 1:
+        notify_text = f"👤 مستخدم جديد!\n\n🆔: {user_id}\n👤: @{username}\n📛: {first_name} {last_name}\n📅: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}"
+        try:
+            bot.send_message(OWNER_ID, notify_text)
+        except Exception as e:
+            logging.error(f"فشل إرسال إشعار مستخدم جديد: {e}")
 
 def is_banned(user_id):
     conn = sqlite3.connect('tiktok_bot.db')
@@ -409,22 +427,6 @@ def has_rated(user_id):
     conn.close()
     return result > 0
 
-# ========== وظيفة الإرسال الدوري ========== #
-def send_periodic_message():
-    while True:
-        try:
-            message = f"✅ البوت يعمل بشكل طبيعي!\n\n" \
-                     f"⏰ آخر تحقق: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}\n" \
-                     f"🆔 الإصدار: {BOT_VERSION}\n" \
-                     f"🤖 المطور: {DEVELOPER_USERNAME}"
-            
-            bot.send_message(PERIODIC_CHAT_ID, message)
-            logging.info("تم إرسال الرسالة الدورية بنجاح")
-        except Exception as e:
-            logging.error(f"خطأ في إرسال الرسالة الدورية: {e}")
-        
-        time.sleep(300)
-
 # ========== رسالة المساعدة ========== #
 HELP_TEXT = f"""
 🎥 بوت تحميل التيك توك
@@ -487,9 +489,23 @@ def set_admin_commands():
         telebot.types.BotCommand("restart", "إعادة تشغيل البوت"),
         telebot.types.BotCommand("adminhelp", "عرض أوامر الإدارة"),
         telebot.types.BotCommand("fixowner", "تصحيح هوية المالك"),
-        telebot.types.BotCommand("svvab", "نسخ محتوى الرسالة")
+        telebot.types.BotCommand("svvab", "نسخ محتوى الرسالة"),
+        telebot.types.BotCommand("togglenotify", "تفعيل/تعطيل إشعارات المستخدمين الجدد")
     ]
     bot.set_my_commands(admin_commands, scope=telebot.types.BotCommandScopeChat(OWNER_ID))
+
+# ========== معالجة المستخدمين الجدد (الميزة الجديدة) ========== #
+@bot.message_handler(commands=['togglenotify'])
+def toggle_notify(message):
+    if not is_owner(message.from_user.id):
+        return
+        
+    current_status = get_setting('notify_new_users')
+    new_status = 0 if current_status == 1 else 1
+    update_setting('notify_new_users', new_status)
+    
+    status_text = "تفعيل" if new_status == 1 else "تعطيل"
+    bot.reply_to(message, f"✅ تم {status_text} إشعارات المستخدمين الجدد")
 
 # ========== معالجات الأوامر للمستخدمين ========== #
 @bot.message_handler(commands=['help'])
@@ -738,28 +754,14 @@ def send_welcome(message):
         bot.reply_to(message, subscribe_msg, reply_markup=keyboard)
         return
         
+    # تحديث رسالة الترحيب حسب طلبك
     welcome_text = """
-🎥 بوت تحميل التيك توك
-
-📋 طريقة الاستخدام:
-• أرسل رابط أي فيديو من التيك توك
-• سأقوم بتحميله لك بجودة 1080p
-• يدعم جميع أنواع روابط التيك توك
-
-🔗 الروابط المدعومة:
-• tiktok.com
-• vm.tiktok.com
-• vt.tiktok.com
-
-⚡ مميزات البوت:
-• تحميل سريع وعالي الجودة
-• دعم جميع أنواع الفيديوهات
-• واجهة عربية بسيطة
-• يعمل على جميع الأجهزة
-
-💡 نصيحة: فقط انسخ الرابط وأرسله هنا!
-
-📌 لعرض الأوامر المتاحة اضغط /meenu
+👋 أهلاً بك!
+📩 أرسل رابط فيديو تيك توك لتحميله بجودة عالية.
+✅ يدعم جميع روابط تيك توك
+⚡ سريع، بسيط، ويعمل على جميع الأجهزة
+📌 لعرض القائمة: /meenu
+📥 جاهز؟ أرسل الرابط وابدأ!
 """
     bot.reply_to(message, welcome_text, parse_mode='Markdown')
     log_activity(user_id, "بدء استخدام البوت")
@@ -1083,6 +1085,7 @@ def admin_help(message):
 • `/setsubscribe <رسالة>` - تغيير رسالة الاشتراك
 • `/subscription` - تفعيل/تعطيل الاشتراك الإجباري
 • `/addchannel <معرف> [اسم]` - إضافة قناة للاشتراك
+• `/togglenotify` - تفعيل/تعطيل إشعارات المستخدمين الجدد
 
 🔧 **أدوات النظام:**
 • `/maintenance` - تفعيل/تعطيل وضع الصيانة
@@ -1174,6 +1177,16 @@ def handle_other_messages(message):
     if message.content_type == 'text':
         bot.reply_to(message, "🔗 الرجاء إرسال رابط فيديو من التيك توك فقط\n\nاستخدم /help لعرض الأوامر المتاحة")
 
+# ========== نظام Keep Alive ========== #
+app = Flask(__name__)
+
+@app.route('/')
+def home():
+    return "✅ البوت يعمل بشكل طبيعي!"
+
+def run_flask():
+    app.run(host='0.0.0.0', port=5000)
+
 # ========== بدء تشغيل البوت ========== #
 if __name__ == '__main__':
     try:
@@ -1185,11 +1198,11 @@ if __name__ == '__main__':
         set_bot_commands()
         set_admin_commands()
         
-        # بدء الخيط للإرسال الدوري
-        periodic_thread = threading.Thread(target=send_periodic_message)
-        periodic_thread.daemon = True
-        periodic_thread.start()
-        logging.info("تم بدء خيط الإرسال الدوري")
+        # بدء خادم Flask في خيط منفصل
+        flask_thread = threading.Thread(target=run_flask)
+        flask_thread.daemon = True
+        flask_thread.start()
+        logging.info("تم بدء خادم Flask على المنفذ 5000")
         
         # إرسال إشعار للمالك
         try:
@@ -1198,7 +1211,8 @@ if __name__ == '__main__':
             logging.error(f"فشل إرسال إشعار للمالك: {e}")
             
         print(f"البوت @{bot_info.username} يعمل الآن...")
-        bot.infinity_polling(none_stop=True, interval=0, timeout=20)
+        # حل مشكلة Conflict بإضافة skip_pending=True
+        bot.infinity_polling(skip_pending=True, timeout=60)
         
     except Exception as e:
         logging.error(f"خطأ فادح: {str(e)}")
