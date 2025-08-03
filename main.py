@@ -10,10 +10,9 @@ import sys
 import os
 import threading
 import socket
-import psutil
 from datetime import datetime
 from dotenv import load_dotenv
-from flask import Flask, request
+from flask import Flask, request, jsonify
 
 # تحميل المتغيرات من ملف .env
 load_dotenv()
@@ -22,7 +21,7 @@ load_dotenv()
 TOKEN = os.getenv("BOT_TOKEN")
 OWNER_ID = int(os.getenv("OWNER_ID", 0))  # افتراضي 0 إذا لم يوجد
 MAINTENANCE_MODE = False
-BOT_VERSION = "1.4"  # تم تحديث الإصدار
+BOT_VERSION = "2.0"
 DEVELOPER_USERNAME = "@Czanw"
 SUPPORT_CHANNEL = "@vcnra"
 
@@ -31,7 +30,7 @@ bot = telebot.TeleBot(TOKEN)
 
 # تكوين السجل
 logging.basicConfig(
-    level=logging.INFO,  # تغيير إلى INFO لتقليل الضوضاء
+    level=logging.INFO,
     format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
     handlers=[
         logging.FileHandler('bot.log'),
@@ -45,70 +44,76 @@ user_reporting = {}
 
 # ========== وظائف قاعدة البيانات ========== #
 def create_database():
-    conn = sqlite3.connect('tiktok_bot.db')
-    c = conn.cursor()
-    
-    # جدول المستخدمين
-    c.execute('''CREATE TABLE IF NOT EXISTS users (
-                 user_id INTEGER PRIMARY KEY,
-                 username TEXT,
-                 first_name TEXT,
-                 last_name TEXT,
-                 date_joined TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                 is_banned INTEGER DEFAULT 0,
-                 last_activity TIMESTAMP,
-                 download_count INTEGER DEFAULT 0)''')
-    
-    # جدول القنوات
-    c.execute('''CREATE TABLE IF NOT EXISTS channels (
-                 id INTEGER PRIMARY KEY AUTOINCREMENT,
-                 channel_id TEXT UNIQUE,
-                 channel_name TEXT,
-                 is_primary INTEGER DEFAULT 0)''')
-    
-    # جدول الإعدادات
-    c.execute('''CREATE TABLE IF NOT EXISTS settings (
-                 id INTEGER PRIMARY KEY,
-                 welcome_msg TEXT,
-                 subscribe_msg TEXT,
-                 forced_subscription INTEGER DEFAULT 0,
-                 maintenance_mode INTEGER DEFAULT 0,
-                 notify_new_users INTEGER DEFAULT 1,
-                 error_reporting INTEGER DEFAULT 1)''')
-    
-    # جدول الإحصاءات
-    c.execute('''CREATE TABLE IF NOT EXISTS statistics (
-                 id INTEGER PRIMARY KEY AUTOINCREMENT,
-                 user_id INTEGER,
-                 action TEXT,
-                 timestamp TIMESTAMP DEFAULT CURRENT_TIMESTAMP)''')
-    
-    # جدول التنزيلات
-    c.execute('''CREATE TABLE IF NOT EXISTS downloads (
-                 id INTEGER PRIMARY KEY AUTOINCREMENT,
-                 user_id INTEGER,
-                 video_url TEXT,
-                 timestamp TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                 status TEXT)''')
-    
-    # جدول التقييمات
-    c.execute('''CREATE TABLE IF NOT EXISTS ratings (
-                 id INTEGER PRIMARY KEY AUTOINCREMENT,
-                 user_id INTEGER,
-                 rating INTEGER,
-                 timestamp TIMESTAMP DEFAULT CURRENT_TIMESTAMP)''')
-    
-    # إدخال الإعدادات الافتراضية
-    c.execute('''INSERT OR IGNORE INTO settings (id, welcome_msg, subscribe_msg, notify_new_users) 
-                 VALUES (1, 'مرحباً بك في بوت تحميل التيك توك! 🎥\n\nفقط أرسل رابط الفيديو وسأقوم بتحميله لك بجودة 720p', 'يجب الاشتراك في القناة أولاً للاستفادة من البوت', 1)''')
-    
-    conn.commit()
-    conn.close()
+    try:
+        conn = sqlite3.connect('tiktok_bot.db')
+        c = conn.cursor()
+        
+        # جدول المستخدمين
+        c.execute('''CREATE TABLE IF NOT EXISTS users (
+                    user_id INTEGER PRIMARY KEY,
+                    username TEXT,
+                    first_name TEXT,
+                    last_name TEXT,
+                    date_joined TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                    is_banned INTEGER DEFAULT 0,
+                    last_activity TIMESTAMP,
+                    download_count INTEGER DEFAULT 0)''')
+        
+        # جدول القنوات
+        c.execute('''CREATE TABLE IF NOT EXISTS channels (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    channel_id TEXT UNIQUE,
+                    channel_name TEXT,
+                    is_primary INTEGER DEFAULT 0)''')
+        
+        # جدول الإعدادات
+        c.execute('''CREATE TABLE IF NOT EXISTS settings (
+                    id INTEGER PRIMARY KEY,
+                    welcome_msg TEXT,
+                    subscribe_msg TEXT,
+                    forced_subscription INTEGER DEFAULT 0,
+                    maintenance_mode INTEGER DEFAULT 0,
+                    notify_new_users INTEGER DEFAULT 1,
+                    error_reporting INTEGER DEFAULT 1)''')
+        
+        # جدول الإحصاءات
+        c.execute('''CREATE TABLE IF NOT EXISTS statistics (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    user_id INTEGER,
+                    action TEXT,
+                    timestamp TIMESTAMP DEFAULT CURRENT_TIMESTAMP)''')
+        
+        # جدول التنزيلات
+        c.execute('''CREATE TABLE IF NOT EXISTS downloads (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    user_id INTEGER,
+                    video_url TEXT,
+                    timestamp TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                    status TEXT)''')
+        
+        # جدول التقييمات
+        c.execute('''CREATE TABLE IF NOT EXISTS ratings (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    user_id INTEGER,
+                    rating INTEGER,
+                    timestamp TIMESTAMP DEFAULT CURRENT_TIMESTAMP)''')
+        
+        # إدخال الإعدادات الافتراضية
+        c.execute('''INSERT OR IGNORE INTO settings (id, welcome_msg, subscribe_msg, notify_new_users) 
+                    VALUES (1, 'مرحباً بك في بوت تحميل التيك توك! 🎥\n\nفقط أرسل رابط الفيديو وسأقوم بتحميله لك بجودة 720p', 'يجب الاشتراك في القناة أولاً للاستفادة من البوت', 1)''')
+        
+        conn.commit()
+        logger.info("تم إنشاء/تحميل قاعدة البيانات بنجاح")
+    except Exception as e:
+        logger.error(f"خطأ في إنشاء قاعدة البيانات: {e}")
+    finally:
+        conn.close()
 
 def upgrade_database():
-    conn = sqlite3.connect('tiktok_bot.db')
-    c = conn.cursor()
     try:
+        conn = sqlite3.connect('tiktok_bot.db')
+        c = conn.cursor()
+        
         # التحقق من وجود عمود download_count
         c.execute("PRAGMA table_info(users)")
         columns = [col[1] for col in c.fetchall()]
@@ -125,10 +130,11 @@ def upgrade_database():
             c.execute("ALTER TABLE settings ADD COLUMN notify_new_users INTEGER DEFAULT 1")
             logger.info("تمت إضافة عمود notify_new_users إلى جدول settings")
             c.execute("UPDATE settings SET notify_new_users=1 WHERE id=1")
+        
+        conn.commit()
     except Exception as e:
         logger.error(f"خطأ في تحديث قاعدة البيانات: {e}")
     finally:
-        conn.commit()
         conn.close()
 
 # استدعاء إنشاء قاعدة البيانات
@@ -1219,7 +1225,13 @@ def handle_tiktok_link(message):
     try:
         video_url = get_tiktok_video(message.text)
         if video_url:
-            bot.send_video(message.chat.id, video_url, caption="✅ تم تحميل الفيديو بنجاح!\n\n📥 تم التنزيل بواسطة @Jvrsbot")
+            # إرسال الفيديو مع التسمية التوضيحية
+            bot.send_video(
+                message.chat.id, 
+                video_url, 
+                caption="✅ تم تحميل الفيديو بنجاح!\n\n📥 تم التنزيل بواسطة @Jvrsbot",
+                supports_streaming=True
+            )
             increment_download_count(user_id)
             log_download(user_id, message.text, "success")
             log_activity(user_id, "تنزيل فيديو ناجح")
@@ -1259,73 +1271,104 @@ app = Flask(__name__)
 def home():
     return "✅ البوت يعمل بشكل طبيعي!"
 
+@app.route('/health')
+def health_check():
+    return jsonify(status="ok", version=BOT_VERSION), 200
+
 def run_flask():
     app.run(host='0.0.0.0', port=5000, use_reloader=False)
 
-# ========== مراقبة الذاكرة ========== #
+# ========== نظام مراقبة الذاكرة ========== #
 def memory_monitor():
     while True:
         try:
-            process = psutil.Process(os.getpid())
-            mem = process.memory_info().rss / 1024 ** 2
-            if mem > 500:  # إذا تجاوزت الذاكرة 500MB
-                logger.warning(f"تحذير: استهلاك عالي للذاكرة ({mem:.2f}MB)")
-            time.sleep(60)
+            # حساب استخدام الذاكرة (بدون psutil)
+            if os.name == 'posix':  # لنظم لينكس/ماك
+                import resource
+                usage = resource.getrusage(resource.RUSAGE_SELF).ru_maxrss / 1024  # بالكيلوبايت
+            else:  # لنظم ويندوز
+                import psutil
+                process = psutil.Process(os.getpid())
+                usage = process.memory_info().rss / 1024 ** 2  # بالميجابايت
+            
+            logger.info(f"استخدام الذاكرة الحالي: {usage:.2f} {'KB' if os.name == 'posix' else 'MB'}")
+            
+            # إعادة التشغيل إذا تجاوزت الذاكرة الحد المسموح
+            if (os.name == 'posix' and usage > 300000) or (os.name != 'posix' and usage > 500):
+                logger.warning("استهلاك عالي للذاكرة، جاري إعادة التشغيل...")
+                python = sys.executable
+                os.execl(python, python, *sys.argv)
+                
+            time.sleep(300)  # التحقق كل 5 دقائق
         except Exception as e:
             logger.error(f"خطأ في مراقبة الذاكرة: {e}")
-            time.sleep(300)
+            time.sleep(60)
+
+# ========== نظام الحماية من التشغيل المتعدد ========== #
+def create_lock():
+    try:
+        global lock_socket
+        lock_socket = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+        lock_socket.bind(('127.0.0.1', 47200))
+        logger.info("تم إنشاء قفل التشغيل الفريد")
+        return True
+    except socket.error:
+        logger.error("⛔ البوت يعمل بالفعل! أوقف النسخة الأخرى أولاً")
+        return False
 
 # ========== بدء تشغيل البوت ========== #
 if __name__ == '__main__':
-    try:
-        # منع تشغيل أكثر من نسخة
-        lock_socket = socket.socket(socket.AF_UNIX, socket.SOCK_DGRAM)
-        try:
-            lock_socket.bind('\0' + 'tiktok_bot_lock')
-            logger.info("تم حظر التشغيل المتعدد - هذه النسخة الوحيدة")
-        except socket.error:
-            logger.error("⛔ البوت يعمل بالفعل! أوقف النسخة الأخرى أولاً")
-            sys.exit(1)
-        
-        logger.info("جارٍ تشغيل البوت...")
-        bot_info = bot.get_me()
-        logger.info(f"تم تشغيل البوت: @{bot_info.username}")
-        
-        # تعيين الأوامر المرئية
-        set_bot_commands()
-        set_admin_commands()
-        
-        # بدء خادم Flask في خيط منفصل
-        flask_thread = threading.Thread(target=run_flask, daemon=True)
-        flask_thread.start()
-        logger.info("تم بدء خادم Flask على المنفذ 5000")
-        
-        # بدء مراقبة الذاكرة
-        memory_thread = threading.Thread(target=memory_monitor, daemon=True)
-        memory_thread.start()
-        logger.info("تم بدء مراقبة استخدام الذاكرة")
-        
-        # إرسال إشعار للمالك
-        if OWNER_ID:
-            try:
-                bot.send_message(OWNER_ID, f"✅ البوت يعمل الآن!\n\n🤖 اسم البوت: @{bot_info.username}\n📱 الإصدار: {BOT_VERSION}")
-            except Exception as e:
-                logger.error(f"فشل إرسال إشعار للمالك: {e}")
-        
-        # حلقة تشغيل البوت مع استعادة الأخطاء
-        while True:
-            try:
-                logger.info("بدء استقبال التحديثات...")
-                bot.infinity_polling(timeout=30, long_polling_timeout=30)
-            except Exception as e:
-                logger.error(f"خطأ في الاتصال: {e}")
-                time.sleep(10)
-        
-    except Exception as e:
-        logger.exception(f"خطأ فادح: {str(e)}")
-        try:
-            if OWNER_ID:
-                bot.send_message(OWNER_ID, f"⛔ البوت توقف بسبب خطأ:\n\n`{str(e)}`", parse_mode='Markdown')
-        except:
-            pass
+    # التحقق من عدم وجود نسخة أخرى تعمل
+    if not create_lock():
         sys.exit(1)
+    
+    # إعادة تشغيل البوت بعد 10 ثواني إذا حدث خطأ
+    restart_attempts = 0
+    max_restart_attempts = 5
+    
+    while restart_attempts < max_restart_attempts:
+        try:
+            logger.info("جارٍ تشغيل البوت...")
+            bot_info = bot.get_me()
+            logger.info(f"تم تشغيل البوت: @{bot_info.username} (الإصدار {BOT_VERSION})")
+            
+            # تعيين الأوامر المرئية
+            set_bot_commands()
+            set_admin_commands()
+            
+            # بدء خادم Flask في خيط منفصل
+            flask_thread = threading.Thread(target=run_flask, daemon=True)
+            flask_thread.start()
+            logger.info("تم بدء خادم Flask على المنفذ 5000")
+            
+            # بدء مراقبة الذاكرة في خيط منفصل
+            memory_thread = threading.Thread(target=memory_monitor, daemon=True)
+            memory_thread.start()
+            logger.info("تم بدء مراقبة استخدام الذاكرة")
+            
+            # إرسال إشعار للمالك
+            if OWNER_ID:
+                try:
+                    bot.send_message(OWNER_ID, f"✅ البوت يعمل الآن!\n\n🤖 اسم البوت: @{bot_info.username}\n📱 الإصدار: {BOT_VERSION}")
+                except Exception as e:
+                    logger.error(f"فشل إرسال إشعار للمالك: {e}")
+            
+            # حلقة التشغيل الرئيسية مع معالجة الأخطاء
+            logger.info("بدء استقبال التحديثات...")
+            bot.infinity_polling(timeout=60, long_polling_timeout=30)
+            
+        except Exception as e:
+            restart_attempts += 1
+            logger.exception(f"خطأ فادح (المحاولة {restart_attempts}/{max_restart_attempts}): {str(e)}")
+            
+            if restart_attempts < max_restart_attempts:
+                logger.info(f"إعادة التشغيل بعد 10 ثواني...")
+                time.sleep(10)
+            else:
+                logger.error("وصل إلى الحد الأقصى لمحاولات إعادة التشغيل")
+                try:
+                    if OWNER_ID:
+                        bot.send_message(OWNER_ID, f"⛔ توقف البوت بعد {max_restart_attempts} محاولات فاشلة!\n\nالخطأ: {str(e)}")
+                except:
+                    pass
+                sys.exit(1)
