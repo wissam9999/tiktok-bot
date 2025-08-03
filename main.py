@@ -25,7 +25,7 @@ DEVELOPER_USERNAME = "@Czanw"
 SUPPORT_CHANNEL = "@vcnra"
 
 # إنشاء كائن البوت
-bot = telebot.TeleBot(TOKEN)
+bot = telebot.TeleBot(TOKEN, num_threads=1)  # تحديد خيط واحد فقط
 
 # تكوين السجل
 logging.basicConfig(
@@ -679,9 +679,7 @@ def report_problem(message):
 def handle_report_description(message):
     user_id = message.from_user.id
     problem_text = message.text
-    
-    bot.reply_to(message, "☑️ تم إيصال مشكلتك إلى المطور.\n🛠️ سنقوم بحلها في أسرع وقت ممكن.")
-    
+        
     report_text = f"🚨 **تبليغ عن مشكلة**\n\n" \
                   f"👤 المستخدم: @{message.from_user.username} ({user_id})\n" \
                   f"✉️ المشكلة:\n{problem_text}"
@@ -689,8 +687,10 @@ def handle_report_description(message):
     try:
         bot.send_message(OWNER_ID, report_text, parse_mode='Markdown')
         logger.info(f"تم إرسال تقرير مشكلة من المستخدم {user_id} إلى المطور")
+        bot.reply_to(message, "☑️ تم إيصال مشكلتك إلى المطور.\n🛠️ سنقوم بحلها في أسرع وقت ممكن.")
     except Exception as e:
         logger.error(f"فشل إرسال التقرير إلى المطور: {e}")
+        bot.reply_to(message, "❌ فشل في إرسال التقرير، الرجاء المحاولة لاحقاً")
     
     del user_reporting[user_id]
     log_activity(user_id, "أبلغ عن مشكلة")
@@ -1310,8 +1310,11 @@ if __name__ == '__main__':
             except telebot.apihelper.ApiTelegramException as api_error:
                 if api_error.error_code == 409:
                     logger.error(f"تعارض في الطلبات (409): {api_error.description}")
-                    logger.info("يبدو أن هناك نسخة أخرى تعمل. جاري إيقاف البوت الحالي...")
-                    bot_running = False
+                    logger.info("يبدو أن هناك نسخة أخرى تعمل. جاري إعادة المحاولة بعد 10 ثواني...")
+                    # في حالة 409، ننتظر 10 ثواني ثم نعيد المحاولة
+                    time.sleep(10)
+                    # نعيد تعيين تأخير إعادة المحاولة
+                    retry_delay = 5
                 else:
                     logger.error(f"خطأ في واجهة برمجة تيليجرام: {api_error}")
                     logger.info(f"إعادة المحاولة بعد {retry_delay} ثواني...")
