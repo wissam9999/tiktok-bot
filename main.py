@@ -9,6 +9,8 @@ import csv
 import sys
 import os
 import threading
+import socket
+import psutil
 from datetime import datetime
 from dotenv import load_dotenv
 from flask import Flask, request
@@ -20,7 +22,7 @@ load_dotenv()
 TOKEN = os.getenv("BOT_TOKEN")
 OWNER_ID = int(os.getenv("OWNER_ID", 0))  # افتراضي 0 إذا لم يوجد
 MAINTENANCE_MODE = False
-BOT_VERSION = "1.3"
+BOT_VERSION = "1.4"  # تم تحديث الإصدار
 DEVELOPER_USERNAME = "@Czanw"
 SUPPORT_CHANNEL = "@vcnra"
 
@@ -1260,17 +1262,31 @@ def home():
 def run_flask():
     app.run(host='0.0.0.0', port=5000, use_reloader=False)
 
-# ========== إدارة حالة البوت ========== #
-bot_running = False
-
-def stop_bot():
-    global bot_running
-    bot_running = False
-    logger.info("إشارة إيقاف البوت تم استلامها")
+# ========== مراقبة الذاكرة ========== #
+def memory_monitor():
+    while True:
+        try:
+            process = psutil.Process(os.getpid())
+            mem = process.memory_info().rss / 1024 ** 2
+            if mem > 500:  # إذا تجاوزت الذاكرة 500MB
+                logger.warning(f"تحذير: استهلاك عالي للذاكرة ({mem:.2f}MB)")
+            time.sleep(60)
+        except Exception as e:
+            logger.error(f"خطأ في مراقبة الذاكرة: {e}")
+            time.sleep(300)
 
 # ========== بدء تشغيل البوت ========== #
 if __name__ == '__main__':
     try:
+        # منع تشغيل أكثر من نسخة
+        lock_socket = socket.socket(socket.AF_UNIX, socket.SOCK_DGRAM)
+        try:
+            lock_socket.bind('\0' + 'tiktok_bot_lock')
+            logger.info("تم حظر التشغيل المتعدد - هذه النسخة الوحيدة")
+        except socket.error:
+            logger.error("⛔ البوت يعمل بالفعل! أوقف النسخة الأخرى أولاً")
+            sys.exit(1)
+        
         logger.info("جارٍ تشغيل البوت...")
         bot_info = bot.get_me()
         logger.info(f"تم تشغيل البوت: @{bot_info.username}")
@@ -1284,6 +1300,11 @@ if __name__ == '__main__':
         flask_thread.start()
         logger.info("تم بدء خادم Flask على المنفذ 5000")
         
+        # بدء مراقبة الذاكرة
+        memory_thread = threading.Thread(target=memory_monitor, daemon=True)
+        memory_thread.start()
+        logger.info("تم بدء مراقبة استخدام الذاكرة")
+        
         # إرسال إشعار للمالك
         if OWNER_ID:
             try:
@@ -1291,17 +1312,15 @@ if __name__ == '__main__':
             except Exception as e:
                 logger.error(f"فشل إرسال إشعار للمالك: {e}")
         
-        # حل مشكلة التعارض
-        bot_running = True
-        while bot_running:
+        # حلقة تشغيل البوت مع استعادة الأخطاء
+        while True:
             try:
                 logger.info("بدء استقبال التحديثات...")
-                bot.infinity_polling(timeout=60, skip_pending=True)
+                bot.infinity_polling(timeout=30, long_polling_timeout=30)
             except Exception as e:
-                logger.error(f"خطأ في polling: {e}")
+                logger.error(f"خطأ في الاتصال: {e}")
                 time.sleep(10)
         
-        logger.info("تم إيقاف البوت")
     except Exception as e:
         logger.exception(f"خطأ فادح: {str(e)}")
         try:
