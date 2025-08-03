@@ -20,7 +20,7 @@ load_dotenv()
 TOKEN = os.getenv("BOT_TOKEN")
 OWNER_ID = int(os.getenv("OWNER_ID", 0))
 MAINTENANCE_MODE = False
-BOT_VERSION = "1.4"  # تم تحديث الإصدار
+BOT_VERSION = "1.5"  # تم تحديث الإصدار
 DEVELOPER_USERNAME = "@Czanw"
 SUPPORT_CHANNEL = "@vcnra"
 
@@ -570,7 +570,7 @@ def about_bot(message):
     bot.reply_to(message, text, parse_mode='Markdown')
     log_activity(user_id, "عرض معلومات البوت")
 
-@bot.message_handler(commands=['tutorial'])
+@bot.message_handler(commands['tutorial'])
 def show_tutorial(message):
     user_id = message.from_user.id
     if is_banned(user_id) or MAINTENANCE_MODE:
@@ -585,7 +585,7 @@ def show_tutorial(message):
     bot.reply_to(message, text, parse_mode='Markdown')
     log_activity(user_id, "عرض الشرح التعليمي")
 
-@bot.message_handler(commands=['features'])
+@bot.message_handler(commands['features'])
 def show_features(message):
     user_id = message.from_user.id
     if is_banned(user_id) or MAINTENANCE_MODE:
@@ -602,7 +602,7 @@ def show_features(message):
     bot.reply_to(message, text, parse_mode='Markdown')
     log_activity(user_id, "عرض المميزات")
 
-@bot.message_handler(commands=['support'])
+@bot.message_handler(commands['support'])
 def contact_support(message):
     user_id = message.from_user.id
     if is_banned(user_id) or MAINTENANCE_MODE:
@@ -616,7 +616,7 @@ def contact_support(message):
     bot.reply_to(message, text, parse_mode='Markdown')
     log_activity(user_id, "طلب الدعم")
 
-@bot.message_handler(commands=['mystats'])
+@bot.message_handler(commands['mystats'])
 def user_stats(message):
     user_id = message.from_user.id
     if is_banned(user_id) or MAINTENANCE_MODE:
@@ -648,7 +648,7 @@ def user_stats(message):
     bot.reply_to(message, text, parse_mode='Markdown')
     log_activity(user_id, "عرض الإحصائيات الشخصية")
 
-@bot.message_handler(commands=['rate'])
+@bot.message_handler(commands['rate'])
 def rate_bot(message):
     user_id = message.from_user.id
     if is_banned(user_id) or MAINTENANCE_MODE:
@@ -665,7 +665,7 @@ def rate_bot(message):
     bot.reply_to(message, "⚡ كيف تقيم تجربتك مع البوت؟", reply_markup=keyboard)
     log_activity(user_id, "طلب التقييم")
 
-@bot.message_handler(commands=['report'])
+@bot.message_handler(commands['report'])
 def report_problem(message):
     user_id = message.from_user.id
     if is_banned(user_id) or MAINTENANCE_MODE:
@@ -695,7 +695,7 @@ def handle_report_description(message):
     del user_reporting[user_id]
     log_activity(user_id, "أبلغ عن مشكلة")
 
-@bot.message_handler(commands=['meenu'])
+@bot.message_handler(commands['meenu'])
 def show_meenu(message):
     user_id = message.from_user.id
     if is_banned(user_id) or MAINTENANCE_MODE:
@@ -749,7 +749,7 @@ def check_subscription_callback(call):
         bot.answer_callback_query(call.id, "❌ لم تقم بالاشتراك بعد!", show_alert=True)
 
 # ========== الأوامر الإدارية ========== #
-@bot.message_handler(commands=['test'])
+@bot.message_handler(commands['test'])
 def test_connection(message):
     user_id = message.from_user.id
     if is_banned(user_id):
@@ -758,7 +758,7 @@ def test_connection(message):
     bot.reply_to(message, "✅ البوت يعمل بشكل طبيعي!")
     log_activity(user_id, "اختبار الاتصال")
 
-@bot.message_handler(commands=['ownercheck'])
+@bot.message_handler(commands['ownercheck'])
 def owner_check(message):
     user_id = message.from_user.id
     if not is_owner(user_id):
@@ -768,7 +768,7 @@ def owner_check(message):
     bot.reply_to(message, f"👑 المالك الحالي:\n\n🆔 `{OWNER_ID}`", parse_mode='Markdown')
     log_activity(user_id, "فحص المالك")
 
-@bot.message_handler(commands=['start'])
+@bot.message_handler(commands['start'])
 def send_welcome(message):
     user_id = message.from_user.id
     add_user(user_id, message.from_user.username, message.from_user.first_name, message.from_user.last_name)
@@ -801,22 +801,33 @@ def send_welcome(message):
     bot.reply_to(message, welcome_text, parse_mode='Markdown')
     log_activity(user_id, "بدء استخدام البوت")
 
-@bot.message_handler(commands=['fixowner'])
+@bot.message_handler(commands['fixowner'])
 def fix_owner(message):
-    if str(message.from_user.id) == "8187185291":
+    # تحقق من أن المستخدم هو المالك الحقيقي
+    if message.from_user.id == 8187185291:
         global OWNER_ID
         OWNER_ID = 8187185291
         bot.reply_to(message, "✅ تم تصحيح المالك! الأن أنت المتحكم")
         logger.info(f"تم تصحيح المالك لـ 8187185291")
         
         try:
-            bot.send_message(OWNER_ID, f"✅ تم تحديث هوية المالك بنجاح!\n\n🆔 هويتك: {OWNER_ID}")
+            # أرسل رسالة تأكيد للمالك الجديد
+            bot.send_message(
+                OWNER_ID, 
+                f"✅ تم تحديث هوية المالك بنجاح!\n\n"
+                f"🆔 هويتك: {OWNER_ID}\n"
+                f"📱 إصدار البوت: {BOT_VERSION}\n"
+                f"⏰ الوقت: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}"
+            )
         except Exception as e:
             logger.error(f"فشل إرسال تأكيد للمالك: {e}")
+            
+        # أعِد تعيين أوامر الأدمن
+        set_admin_commands()
     else:
         bot.reply_to(message, "❌ لا تملك صلاحية هذا الأمر!")
 
-@bot.message_handler(commands=['stats'])
+@bot.message_handler(commands['stats'])
 def send_stats(message):
     if not is_owner(message.from_user.id):
         bot.reply_to(message, "⛔ هذا الأمر متاح فقط للمالك!")
@@ -855,7 +866,7 @@ def send_stats(message):
         bot.reply_to(message, f"❌ حدث خطأ في جلب الإحصائيات: {str(e)}")
         log_error(f"Error in /stats: {str(e)}")
 
-@bot.message_handler(commands=['broadcast'])
+@bot.message_handler(commands['broadcast'])
 def broadcast_message(message):
     if not is_owner(message.from_user.id):
         bot.reply_to(message, "⛔ هذا الأمر متاح فقط للمالك!")
@@ -926,7 +937,7 @@ def handle_broadcast_callback(call):
         bot.edit_message_text(result_msg, call.message.chat.id, call.message.message_id)
         log_activity(call.from_user.id, f"بث رسالة لـ {success} مستخدم")
 
-@bot.message_handler(commands=['ban'])
+@bot.message_handler(commands['ban'])
 def ban_user_command(message):
     if not is_owner(message.from_user.id):
         bot.reply_to(message, "⛔ هذا الأمر متاح فقط للمالك!")
@@ -940,7 +951,7 @@ def ban_user_command(message):
     except (IndexError, ValueError):
         bot.reply_to(message, "استخدام: /ban <ايدي المستخدم>\n\nمثال: /ban 123456789")
 
-@bot.message_handler(commands=['unban'])
+@bot.message_handler(commands['unban'])
 def unban_user_command(message):
     if not is_owner(message.from_user.id):
         bot.reply_to(message, "⛔ هذا الأمر متاح فقط للمالك!")
@@ -954,7 +965,7 @@ def unban_user_command(message):
     except (IndexError, ValueError):
         bot.reply_to(message, "استخدام: /unban <ايدي المستخدم>\n\nمثال: /unban 123456789")
 
-@bot.message_handler(commands=['banned'])
+@bot.message_handler(commands['banned'])
 def list_banned_users(message):
     if not is_owner(message.from_user.id):
         bot.reply_to(message, "⛔ هذا الأمر متاح فقط للمالك!")
@@ -977,7 +988,7 @@ def list_banned_users(message):
     bot.reply_to(message, response, parse_mode='Markdown')
     log_activity(message.from_user.id, "عرض قائمة المحظورين")
 
-@bot.message_handler(commands=['export'])
+@bot.message_handler(commands['export'])
 def export_users_command(message):
     if not is_owner(message.from_user.id):
         bot.reply_to(message, "⛔ هذا الأمر متاح فقط للمالك!")
@@ -1005,7 +1016,7 @@ def export_users_command(message):
     except Exception as e:
         bot.reply_to(message, f"❌ حدث خطأ في التصدير: {str(e)}")
 
-@bot.message_handler(commands=['setwelcome'])
+@bot.message_handler(commands['setwelcome'])
 def set_welcome_message(message):
     if not is_owner(message.from_user.id):
         bot.reply_to(message, "⛔ هذا الأمر متاح فقط للمالك!")
@@ -1021,7 +1032,7 @@ def set_welcome_message(message):
     bot.reply_to(message, "✅ تم تحديث رسالة الترحيب بنجاح")
     log_activity(message.from_user.id, "تحديث رسالة الترحيب")
 
-@bot.message_handler(commands=['setsubscribe'])
+@bot.message_handler(commands['setsubscribe'])
 def set_subscribe_message(message):
     if not is_owner(message.from_user.id):
         bot.reply_to(message, "⛔ هذا الأمر متاح فقط للمالك!")
@@ -1037,7 +1048,7 @@ def set_subscribe_message(message):
     bot.reply_to(message, "✅ تم تحديث رسالة الاشتراك بنجاح")
     log_activity(message.from_user.id, "تحديث رسالة الاشتراك")
 
-@bot.message_handler(commands=['subscription'])
+@bot.message_handler(commands['subscription'])
 def toggle_subscription(message):
     if not is_owner(message.from_user.id):
         bot.reply_to(message, "⛔ هذا الأمر متاح فقط للمالك!")
@@ -1051,7 +1062,7 @@ def toggle_subscription(message):
     bot.reply_to(message, f"✅ {status_text} الاشتراك الإجباري")
     log_activity(message.from_user.id, f"تغيير الاشتراك الإجباري: {new_status}")
 
-@bot.message_handler(commands=['addchannel'])
+@bot.message_handler(commands['addchannel'])
 def add_channel(message):
     if not is_owner(message.from_user.id):
         bot.reply_to(message, "⛔ هذا الأمر متاح فقط للمالك!")
@@ -1080,7 +1091,7 @@ def add_channel(message):
     finally:
         conn.close()
 
-@bot.message_handler(commands=['maintenance'])
+@bot.message_handler(commands['maintenance'])
 def toggle_maintenance(message):
     global MAINTENANCE_MODE
     if not is_owner(message.from_user.id):
@@ -1092,7 +1103,7 @@ def toggle_maintenance(message):
     bot.reply_to(message, status)
     log_activity(message.from_user.id, f"تغيير وضع الصيانة: {MAINTENANCE_MODE}")
 
-@bot.message_handler(commands=['logs'])
+@bot.message_handler(commands['logs'])
 def send_logs(message):
     if not is_owner(message.from_user.id):
         bot.reply_to(message, "⛔ هذا الأمر متاح فقط للمالك!")
@@ -1105,7 +1116,7 @@ def send_logs(message):
     except FileNotFoundError:
         bot.reply_to(message, "❌ ملف السجلات غير موجود")
 
-@bot.message_handler(commands=['restart'])
+@bot.message_handler(commands['restart'])
 def restart_bot(message):
     if not is_owner(message.from_user.id):
         bot.reply_to(message, "⛔ هذا الأمر متاح فقط للمالك!")
@@ -1116,7 +1127,7 @@ def restart_bot(message):
     python = sys.executable
     os.execl(python, python, *sys.argv)
 
-@bot.message_handler(commands=['adminhelp'])
+@bot.message_handler(commands['adminhelp'])
 def admin_help(message):
     if not is_owner(message.from_user.id):
         bot.reply_to(message, "⛔ هذا الأمر متاح فقط للمالك!")
@@ -1153,7 +1164,7 @@ def admin_help(message):
     bot.reply_to(message, help_text, parse_mode='Markdown')
     log_activity(message.from_user.id, "طلب مساعدة الأدمن")
 
-@bot.message_handler(commands=['svvab'])
+@bot.message_handler(commands['svvab'])
 def handle_svvab(message):
     if not is_owner(message.from_user.id):
         bot.reply_to(message, "⛔ هذا الأمر متاح فقط للمالك!")
@@ -1203,7 +1214,27 @@ def handle_tiktok_link(message):
     try:
         video_url = get_tiktok_video(message.text)
         if video_url:
-            bot.send_video(message.chat.id, video_url, caption="✅ تم تحميل الفيديو بنجاح!\n\n📥 تم التنزيل بواسطة @Jvrsbot")
+            try:
+                # تحميل الفيديو كبيانات ثنائية
+                video_content = requests.get(video_url, stream=True, timeout=30).content
+                
+                # إرسال الفيديو كملف
+                bot.send_video(
+                    message.chat.id, 
+                    video_content,
+                    caption="✅ تم تحميل الفيديو بنجاح!\n\n📥 تم التنزيل بواسطة @Jvrsbot",
+                    timeout=60
+                )
+            except Exception as send_error:
+                # إذا فشل الإرسال، أرسل الرابط مباشرة
+                logger.error(f"خطأ في إرسال الفيديو: {send_error}")
+                bot.send_message(
+                    message.chat.id,
+                    f"🎥 تم تحميل الفيديو بنجاح!\n\n"
+                    f"يمكنك تنزيله من هنا:\n{video_url}\n\n"
+                    f"📥 تم التنزيل بواسطة @Jvrsbot"
+                )
+            
             increment_download_count(user_id)
             log_download(user_id, message.text, "success")
             log_activity(user_id, "تنزيل فيديو ناجح")
@@ -1243,8 +1274,12 @@ app = Flask(__name__)
 def home():
     return "✅ البوت يعمل بشكل طبيعي!"
 
+@app.route('/keepalive')
+def keepalive_endpoint():
+    return "Keep-Alive Works", 200
+
 def run_flask():
-    port = int(os.environ.get('PORT', 5000))
+    port = int(os.environ.get('PORT', 10000))  # استخدام المنفذ 10000 لـ Render
     app.run(host='0.0.0.0', port=port, use_reloader=False)
 
 def keep_alive():
@@ -1256,8 +1291,9 @@ def keep_alive():
         
     while True:
         try:
-            response = requests.get(base_url, timeout=10)
-            logger.info(f"تم إرسال طلب إبقاء نشط إلى {base_url} - الحالة: {response.status_code}")
+            # استخدم المسار الجديد /keepalive
+            response = requests.get(f"{base_url}/keepalive", timeout=10)
+            logger.info(f"تم إرسال طلب إبقاء نشط إلى {base_url}/keepalive - الحالة: {response.status_code}")
         except Exception as e:
             logger.error(f"فشل في إرسال طلب الإبقاء: {str(e)}")
         
@@ -1278,7 +1314,7 @@ if __name__ == '__main__':
         # بدء خادم Flask في خيط منفصل
         flask_thread = threading.Thread(target=run_flask, daemon=True)
         flask_thread.start()
-        logger.info("تم بدء خادم Flask")
+        logger.info(f"تم بدء خادم Flask على المنفذ {os.getenv('PORT', 10000)}")
         
         # بدء وظيفة المنبه في خيط منفصل
         keep_alive_thread = threading.Thread(target=keep_alive, daemon=True)
@@ -1288,51 +1324,47 @@ if __name__ == '__main__':
         # إرسال إشعار للمالك
         if OWNER_ID:
             try:
-                bot.send_message(OWNER_ID, f"✅ البوت يعمل الآن!\n\n🤖 اسم البوت: @{bot_info.username}\n📱 الإصدار: {BOT_VERSION}")
+                bot.send_message(
+                    OWNER_ID, 
+                    f"✅ البوت يعمل الآن!\n\n"
+                    f"🤖 اسم البوت: @{bot_info.username}\n"
+                    f"📱 الإصدار: {BOT_VERSION}\n"
+                    f"🌐 رابط Keep-Alive: {os.getenv('BASE_URL')}/keepalive"
+                )
             except Exception as e:
                 logger.error(f"فشل إرسال إشعار للمالك: {e}")
         
         # حل مشكلة التعارض مع إعادة المحاولة
         bot_running = True
-        retry_delay = 5  # البدء بـ 5 ثواني
-        max_retry_delay = 60  # أقصى وقت انتظار 60 ثانية
+        retry_delay = 5
         
         while bot_running:
             try:
-                logger.info(f"بدء استقبال التحديثات (المهلة: {retry_delay} ثانية)...")
-                
-                # استخدم long polling مع skip_pending=True
-                bot.infinity_polling(timeout=60, skip_pending=True)
-                
-                logger.info("تم إيقاف استقبال التحديثات بشكل طبيعي.")
-                break  # الخروج من الحلقة إذا تم إيقاف البوت بشكل طبيعي
+                logger.info("بدء استقبال التحديثات...")
+                bot.infinity_polling(timeout=60, skip_pending=True, reset_webhook=True)
+                break
                 
             except telebot.apihelper.ApiTelegramException as api_error:
                 if api_error.error_code == 409:
                     logger.error(f"تعارض في الطلبات (409): {api_error.description}")
-                    logger.info("يبدو أن هناك نسخة أخرى تعمل. جاري إعادة المحاولة بعد 10 ثواني...")
-                    # في حالة 409، ننتظر 10 ثواني ثم نعيد المحاولة
+                    logger.info("جاري إعادة المحاولة بعد 10 ثواني...")
                     time.sleep(10)
-                    # نعيد تعيين تأخير إعادة المحاولة
-                    retry_delay = 5
                 else:
                     logger.error(f"خطأ في واجهة برمجة تيليجرام: {api_error}")
-                    logger.info(f"إعادة المحاولة بعد {retry_delay} ثواني...")
                     time.sleep(retry_delay)
-                    retry_delay = min(retry_delay * 2, max_retry_delay)
+                    retry_delay = min(retry_delay * 2, 60)
                     
-            except Exception as e:
-                logger.error(f"خطأ عام في polling: {e}")
-                logger.info(f"إعادة المحاولة بعد {retry_delay} ثواني...")
+            except requests.exceptions.ConnectionError as conn_error:
+                logger.error(f"خطأ في الاتصال: {conn_error}")
                 time.sleep(retry_delay)
-                retry_delay = min(retry_delay * 2, max_retry_delay)
+                retry_delay = min(retry_delay * 2, 60)
+                
+            except Exception as e:
+                logger.error(f"خطأ عام: {e}")
+                time.sleep(retry_delay)
+                retry_delay = min(retry_delay * 2, 60)
         
         logger.info("تم إيقاف البوت")
     except Exception as e:
         logger.exception(f"خطأ فادح: {str(e)}")
-        try:
-            if OWNER_ID:
-                bot.send_message(OWNER_ID, f"⛔ البوت توقف بسبب خطأ:\n\n`{str(e)}`", parse_mode='Markdown')
-        except:
-            pass
         sys.exit(1)
